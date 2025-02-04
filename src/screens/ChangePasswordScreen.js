@@ -40,7 +40,7 @@ const ChangePasswordScreen = () => {
         }
 
         try {
-            // Re-authenticate user with the old password
+
             const { error: signInError } = await supabase.auth.signInWithPassword({
                 email: user.email,
                 password: oldPassword,
@@ -51,7 +51,6 @@ const ChangePasswordScreen = () => {
                 return;
             }
 
-            // If old password is correct, update with the new password
             const { error } = await supabase.auth.updateUser({
                 password: newPassword,
             });
@@ -59,7 +58,7 @@ const ChangePasswordScreen = () => {
             if (error) throw error;
 
             Alert.alert('Success', 'Password changed successfully!');
-            navigation.goBack(); // Navigate back to the previous screen after success
+            navigation.goBack();
         } catch (error) {
             Alert.alert('Error', error.message);
         }
