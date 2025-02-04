@@ -1,36 +1,62 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Button } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
 import { database } from '../watermelonDB/database';
+import { supabase } from '../supabase/supabaseClient';
+import { useNavigation } from '@react-navigation/native';
+import Share from 'react-native-share';
+
 const ContactList = () => {
     const [contacts, setContacts] = useState([]);
+    const navigation = useNavigation();
+
+    const fetchUserDataFromSupabase = async (phoneNumber) => {
+        const { data, error } = await supabase
+            .from('user_details')
+            .select('*')
+            .eq('phone', phoneNumber);
+
+        if (error) {
+            console.log("Error fetching data from Supabase:", error);
+            return null;
+        }
+
+        return data;
+    };
 
     const insertContactsToDB = async () => {
         const contactsToInsert = [
-            { name: 'John Doe', phone: '9109452170', image: 'https://randomuser.me/api/portraits/men/1.jpg' },
-            { name: 'Jane Smith', phone: '6265620799', image: 'https://randomuser.me/api/portraits/women/2.jpg' },
-            { name: 'Sara Lee', phone: '9876543212', image: 'https://randomuser.me/api/portraits/women/3.jpg' },
-            { name: 'Michael Brown', phone: '9876543213', image: 'https://randomuser.me/api/portraits/men/4.jpg' },
-            { name: 'Emily White', phone: '9876543214', image: 'https://randomuser.me/api/portraits/women/5.jpg' },
+            { name: 'Alex Johnson', phone: '9109452170', image: 'https://randomuser.me/api/portraits/men/2.jpg' },
+            { name: 'Olivia Martinez', phone: '9981333588', image: 'https://randomuser.me/api/portraits/women/1.jpg' },
+            { name: 'William Harris', phone: '9876543201', image: 'https://randomuser.me/api/portraits/men/3.jpg' },
+            { name: 'Sophia Garcia', phone: '9123456780', image: 'https://randomuser.me/api/portraits/women/4.jpg' },
+            { name: 'James Williams', phone: '9109452160', image: 'https://randomuser.me/api/portraits/men/5.jpg' },
+            { name: 'Mia Brown', phone: '6234567801', image: 'https://randomuser.me/api/portraits/women/6.jpg' },
+            { name: 'Liam Lee', phone: '9876543220', image: 'https://randomuser.me/api/portraits/men/6.jpg' },
+            { name: 'Isabella Clark', phone: '9109452180', image: 'https://randomuser.me/api/portraits/women/7.jpg' },
+            { name: 'Ethan Scott', phone: '6234567811', image: 'https://randomuser.me/api/portraits/men/7.jpg' },
         ];
 
         const contactCollection = database.collections.get('contacts');
 
-        await database.write(async () => {
-            // Loop over each contact to check if it already exists in the DB
-            for (let contact of contactsToInsert) {
-                const existingContact = await contactCollection.query(
-                    Q.where('phone', contact.phone)
-                ).fetch();
+        const existingContacts = await contactCollection.query().fetch();
+        const existingPhoneNumbers = new Set(existingContacts.map(contact => contact.phone));
 
-                if (existingContact.length === 0) {
+        const newContacts = contactsToInsert.filter(contact => !existingPhoneNumbers.has(contact.phone));
+
+        if (newContacts.length > 0) {
+            await database.write(async () => {
+                for (let contact of newContacts) {
                     await contactCollection.create(contactData => {
                         contactData.name = contact.name;
                         contactData.phone = contact.phone;
                         contactData.image = contact.image;
                     });
                 }
-            }
-        });
+            });
+            console.log(`${newContacts.length} new contacts inserted.`);
+        } else {
+            console.log("No new contacts to insert.");
+        }
     };
 
     const fetchContactsFromDB = async () => {
@@ -44,6 +70,44 @@ const ContactList = () => {
         setContacts(rawContacts);
     };
 
+    const handleContactPress = async (contact) => {
+        console.log("Navigation Click=======================================>")
+        const userData = await fetchUserDataFromSupabase(contact.phone);
+
+        if (userData && userData.length > 0) {
+            navigateToChatScreen(userData[0]);
+        } else {
+            showInvitePopup(contact);
+        }
+    };
+
+    const navigateToChatScreen = (userData) => {
+        navigation.navigate('ChatScreen', { user: userData });
+    };
+
+    const showInvitePopup = (contact) => {
+        console.log("Show Invite Alertbox");
+        Alert.alert(
+            'Invite to Chat',
+            `${contact.name} is not on the platform. Would you like to invite them?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Invite', onPress: () => openShareSheet(contact) },
+            ]
+        );
+    };
+    const openShareSheet = (contact) => {
+        const shareOptions = {
+            title: 'Invite to Chat',
+            message: `Hey, I would like to invite you to join our chat platform. Here's my contact: ${contact.phone}`,
+            url: 'https://your-app-link.com',
+        };
+
+        Share.open(shareOptions)
+            .then((res) => console.log('Share success:', res))
+            .catch((err) => console.log('Error opening share sheet:', err));
+    };
+
 
     useEffect(() => {
         insertContactsToDB();
@@ -51,7 +115,7 @@ const ContactList = () => {
     }, []);
 
     const renderItem = ({ item }) => (
-        <TouchableOpacity style={styles.contactCard}>
+        <TouchableOpacity style={styles.contactCard} onPress={() => handleContactPress(item)}>
             <Image source={{ uri: item.image }} style={styles.profileImage} />
             <View style={styles.contactInfo}>
                 <Text style={styles.contactName}>{item.name}</Text>
